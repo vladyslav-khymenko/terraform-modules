@@ -6,6 +6,16 @@ locals {
   all_ips      = ["0.0.0.0/0"]
 }
 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
+  }
+}
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -68,7 +78,7 @@ resource "aws_security_group_rule" "allow_all_outbound" {
 }
 
 resource "aws_launch_configuration" "example" {
-  image_id        = var.ami
+  image_id        = data.aws_ami.ubuntu.id
   instance_type   = var.instance_type
   security_groups = [aws_security_group.instance.id]
 
