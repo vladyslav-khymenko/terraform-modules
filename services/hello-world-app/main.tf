@@ -6,15 +6,38 @@ locals {
   all_ips      = ["0.0.0.0/0"]
 }
 
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
+module "asg" {
+  source = "../../cluster/asg-rolling-deploy"
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-  }
+  cluster_name  = "hello-world-${var.environment}"
+  ami           = var.ami
+  instance_type = var.instance_type
+
+  user_data     = templatefile("${path.module}/user-data.sh", {
+    server_port = var.server_port
+    db_address  = data.terraform_remote_state.db.outputs.address
+    db_port     = data.terraform_remote_state.db.outputs.port
+    server_text = var.server_text
+  })
+
+  min_size           = var.min_size
+  max_size           = var.max_size
+  enable_autoscaling = var.enable_autoscaling
+
+  subnet_ids        = data.aws_subnets.default.ids
+  target_group_arns = [aws_lb_target_group.asg.arn]
+  health_check_type = "ELB"
+
+  custom_tags = var.custom_tags
 }
+
+module "alb" {
+  source = "../../networking/alb"
+
+  alb_name   = "hello-world-${var.environment}"
+  subnet_ids = data.aws_subnets.default.ids
+}
+
 
 data "aws_vpc" "default" {
   default = true
@@ -38,7 +61,7 @@ data "terraform_remote_state" "db" {
 }
 
 resource "aws_lb_target_group" "asg" {
-  name     = "${var.cluster_name}-asg"
+  name     = "hello-world-${var.environment}"
   port     = var.server_port
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
@@ -55,7 +78,7 @@ resource "aws_lb_target_group" "asg" {
 }
 
 resource "aws_lb_listener_rule" "asg" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = module.alb.alb_http_listener_arn
   priority     = 100
 
   condition {
@@ -65,7 +88,7 @@ resource "aws_lb_listener_rule" "asg" {
   }
 
   action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.asg.arn
   }
 }
