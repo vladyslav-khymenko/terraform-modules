@@ -1,5 +1,5 @@
 resource "aws_launch_configuration" "example" {
-  image_id        = data.aws_ami.ubuntu.id
+  image_id        = var.ami
   instance_type   = var.instance_type
   security_groups = [aws_security_group.instance.id]
 
@@ -89,4 +89,9 @@ resource "aws_security_group_rule" "allow_server_http_inbound" {
   to_port     = var.server_port
   protocol    = local.tcp_protocol
   cidr_blocks = local.all_ips
+}
+
+locals {
+  tcp_protocol = "tcp"
+  all_ips      = ["0.0.0.0/0"]
 }
